@@ -260,8 +260,11 @@ A production-level FastAPI service for real-time market intelligence and AI-powe
                         const resultsArea = document.getElementById('resultsArea');
                         const resultsContent = document.getElementById('resultsContent');
 
+                        console.log("Starting analysis for:", sector);
+
                         // Auto-fetch token if missing
                         if (!token) {
+                            console.log("No token found. Attempting auto-auth...");
                             status.innerText = "Initializing secure session... (Auto-authenticating)";
                             try {
                                 const formData = new URLSearchParams();
@@ -272,15 +275,20 @@ A production-level FastAPI service for real-time market intelligence and AI-powe
                                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                                     body: formData
                                 });
+                                
+                                if (!authRes.ok) throw new Error("Auth endpoint returned " + authRes.status);
+                                
                                 const authData = await authRes.json();
                                 if (authData.access_token) {
                                     token = authData.access_token;
                                     localStorage.setItem('demo_token', token);
+                                    console.log("Auto-auth successful.");
                                 } else {
-                                    throw new Error("Auth failed");
+                                    throw new Error("Token missing in response");
                                 }
                             } catch (e) {
-                                status.innerText = "Error: Auto-authentication failed. Please refresh.";
+                                console.error("Auto-auth failed:", e);
+                                status.innerText = "Error: Session initialization failed. Please refresh the page.";
                                 return;
                             }
                         }
@@ -291,22 +299,30 @@ A production-level FastAPI service for real-time market intelligence and AI-powe
                         resultsArea.style.display = "none";
                         
                         try {
+                            console.log("Fetching analysis from API...");
                             const response = await fetch('/api/v1/analyze/' + encodeURIComponent(sector), {
                                 headers: { 'Authorization': 'Bearer ' + token }
                             });
                             
                             if (response.status === 200) {
                                 const text = await response.text();
+                                console.log("Analysis received successfully.");
                                 lastReportMarkdown = text;
                                 lastSector = sector;
                                 resultsContent.innerHTML = marked.parse(text);
                                 resultsArea.style.display = "block";
                                 status.innerText = "Analysis complete!";
                                 resultsArea.scrollIntoView({ behavior: 'smooth' });
+                            } else if (response.status === 401) {
+                                console.warn("Token expired or invalid (401). Clearing and retrying once...");
+                                localStorage.removeItem('demo_token');
+                                startAnalysis(); // Recursive retry once
+                                return;
                             } else {
-                                throw new Error("Status: " + response.status);
+                                throw new Error("API returned " + response.status);
                             }
                         } catch (err) {
+                            console.error("API error:", err);
                             status.innerText = "Error: " + err.message;
                         } finally {
                             btn.disabled = false;
