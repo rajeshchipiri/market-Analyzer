@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+google-generativeai
+duckduckgo-search
+slowapi
+python-jose[cryptography]
+python-multipart
+jinja2

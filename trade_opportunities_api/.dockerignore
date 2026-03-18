@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+venv/
+ENV/
+.git/
+.gitignore
+*.md
+!README.md
+!API_DOCUMENTATION.md
