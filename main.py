@@ -248,50 +248,70 @@ A production-level FastAPI service for real-time market intelligence and AI-powe
                         }
                     }
 
-                    function startAnalysis() {
-                        const sector = document.getElementById('sectorInput').value.trim();
-                        const token = localStorage.getItem('demo_token');
+                    async function startAnalysis() {
+                        const sectorInput = document.getElementById('sectorInput');
+                        const sector = sectorInput.value.trim();
+                        let token = localStorage.getItem('demo_token');
                         
                         if (!sector) { alert("Please enter a sector name."); return; }
-                        if (!token) { alert("Please set a demo token first."); return; }
 
                         const status = document.getElementById('statusMsg');
                         const btn = document.getElementById('genBtn');
                         const resultsArea = document.getElementById('resultsArea');
                         const resultsContent = document.getElementById('resultsContent');
 
+                        // Auto-fetch token if missing
+                        if (!token) {
+                            status.innerText = "Initializing secure session... (Auto-authenticating)";
+                            try {
+                                const formData = new URLSearchParams();
+                                formData.append('username', 'guest_investor');
+                                formData.append('password', 'secure_pass_123');
+                                const authRes = await fetch('/api/v1/auth/token', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                                    body: formData
+                                });
+                                const authData = await authRes.json();
+                                if (authData.access_token) {
+                                    token = authData.access_token;
+                                    localStorage.setItem('demo_token', token);
+                                } else {
+                                    throw new Error("Auth failed");
+                                }
+                            } catch (e) {
+                                status.innerText = "Error: Auto-authentication failed. Please refresh.";
+                                return;
+                            }
+                        }
+
                         status.innerText = "Analyzing " + sector + "... please wait (fetching data and AI processing).";
                         btn.disabled = true;
                         btn.innerText = "Processing...";
                         resultsArea.style.display = "none";
                         
-                        fetch('/api/v1/analyze/' + encodeURIComponent(sector), {
-                            headers: { 'Authorization': 'Bearer ' + token }
-                        })
-                        .then(response => {
-                            if (response.status === 200) return response.text();
-                            else throw new Error("Error: " + response.status);
-                        })
-                        .then(text => {
-                            lastReportMarkdown = text;
-                            lastSector = sector;
-                            resultsContent.innerHTML = marked.parse(text);
-                            resultsArea.style.display = "block";
-                            status.innerText = "Analysis complete!";
-                            btn.disabled = false;
-                            btn.innerText = "Generate Report";
-                            resultsArea.scrollIntoView({ behavior: 'smooth' });
-                        })
-                        .catch(err => {
-                            if (err.message.includes("401")) {
-                                status.innerText = "Error: Unauthorized (401). Please click the button below to set a Demo Token.";
-                                alert("Authentication required. Please set a demo token first.");
+                        try {
+                            const response = await fetch('/api/v1/analyze/' + encodeURIComponent(sector), {
+                                headers: { 'Authorization': 'Bearer ' + token }
+                            });
+                            
+                            if (response.status === 200) {
+                                const text = await response.text();
+                                lastReportMarkdown = text;
+                                lastSector = sector;
+                                resultsContent.innerHTML = marked.parse(text);
+                                resultsArea.style.display = "block";
+                                status.innerText = "Analysis complete!";
+                                resultsArea.scrollIntoView({ behavior: 'smooth' });
                             } else {
-                                status.innerText = "Error: " + err.message;
+                                throw new Error("Status: " + response.status);
                             }
+                        } catch (err) {
+                            status.innerText = "Error: " + err.message;
+                        } finally {
                             btn.disabled = false;
                             btn.innerText = "Generate Report";
-                        });
+                        }
                     }
 
                     function downloadMarkdown() {
